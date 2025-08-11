@@ -21,7 +21,7 @@
         .card { background-color: var(--card-bg); border-radius: 16px; padding: 25px; margin-bottom: 20px; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 8px; }
-        .form-group input, .form-group textarea { width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid var(--border-color); color: white; border-radius: 8px; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 12px; background: #2a2a2a; border: 1px solid var(--border-color); color: white; border-radius: 8px; }
         .btn { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-danger { background: var(--red); color: white; }
@@ -30,6 +30,9 @@
         .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
         .table button { margin-right: 5px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
         .table button.btn-sm { padding: 3px 8px; font-size: 10px; }
+        hr { border-color: var(--border-color); margin: 25px 0; }
+        #payment-methods-list div { margin-bottom: 10px; }
+        #payment-methods-list input { margin-right: 5px; }
         @media (min-width: 992px) { .sidebar { transform: translateX(0); } .main-content { margin-left: 260px; } #menu-toggle { display: none; } }
     </style>
     
@@ -66,17 +69,16 @@
         </div>
     </div>
     
-    <!-- IMPORTANT: Ensure 'language.js' file exists in the same directory -->
-    <!-- If it doesn't, you'll need to create it or embed its content here -->
-    <script src="language.js"></script>
+    <!-- IMPORTANT: Ensure 'language.js' file exists in the same directory for user.html -->
+    <!-- For admin.html, language.js is not strictly necessary unless used internally -->
+    <script src="language.js"></script> 
 
     <script>
-        // --- Embedded config.js Content ---
-        // Telegram Bot Configuration
-        const BOT_USERNAME = '@Ads_To_Money25bot'; // আপনার নতুন টেলিগ্রাম বটের ইউজারনেম
-        const BOT_NAME = 'Ads to Money';          // আপনার নতুন বটের প্রদর্শিত নাম (ঐচ্ছিক)
+        // --- Embedded configuration ---
+        // Bot Username (can also be loaded from Firebase if needed)
+        const BOT_USERNAME = '@Ads_To_Money25bot';
 
-        // Firebase Configuration
+        // Firebase Configuration (provided by user)
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyBfQBxUY9ftvzXTJykMf4Z_mEvIgaQ0RyI",
             authDomain: "earing-technology.firebaseapp.com",
@@ -87,49 +89,24 @@
             appId: "1:567390086459:web:a717e290a37a623be9431e",
             measurementId: "G-C8CK3P3LQL"
         };
-
-        // Admin Panel Configuration
-        const ADMIN_PASSWORD = '@@@@@'; // আপনার দেওয়া পাসওয়ার্ড
-
-        // Ad Zones Configuration (Monetage SDK এর জন্য)
-        const AD_ZONES = {
-            interstitial: '9698971', // রিওয়ার্ডেড ইন্টারস্টিশিয়ালের জন্য
-            popup: '9698971'         // রিওয়ার্ডেড পপআপের জন্য (যদি একই জোন হয়)
-        };
-
-        // Ad Limits Configuration
-        const AD_LIMITS = {
-            interstitial: 5, // প্রতিদিন রিওয়ার্ডেড ইন্টারস্টিশিয়াল অ্যাডের সর্বোচ্চ সংখ্যা
-            popup: 3         // প্রতিদিন রিওয়ার্ডেড পপআপ অ্যাডের সর্বোচ্চ সংখ্যা
-        };
-
-        // Engagement Features Configuration
-        const ENGAGEMENT_FEATURES = {
-            daily_bonus: {
-                enabled: true,
-                reward: 0.05 // প্রতিদিনের বোনাস দাবি করার জন্য রিওয়ার্ড
-            },
-            referral_system: {
-                enabled: true,
-                reward_per_referral: 0.10 // প্রতি সফল রেফারেলের জন্য রিওয়ার্ড
-            }
-        };
-
-        // Withdrawal Settings
-        const WITHDRAWAL_SETTINGS = {
-            fee_percentage: 5 // উইথড্রয়াল ফি শতাংশ
-        };
-        // --- End of Embedded config.js Content ---
+        // --- End of embedded configuration ---
 
         let db;
+        let appSettings = {}; // Global object to store all dynamic settings
 
+        // --- Admin Authentication ---
         function checkPassword(){ 
             if (typeof ADMIN_PASSWORD === 'undefined' || typeof FIREBASE_CONFIG === 'undefined') {
-                alert("Configuration error. Please check config.");
+                alert("Configuration error. Please check configuration.");
                 return;
             }
 
-            if(document.getElementById('admin-password').value === ADMIN_PASSWORD) { 
+            // Assuming ADMIN_PASSWORD would be embedded or loaded securely. 
+            // For this example, it's embedded in the logic below for simplicity.
+            // In a real app, ADMIN_PASSWORD should be in the embedded config or fetched securely.
+            const ADMIN_PASSWORD_FOR_CHECK = '@@@@@'; // Hardcoded as per previous instruction
+
+            if(document.getElementById('admin-password').value === ADMIN_PASSWORD_FOR_CHECK) { 
                 document.getElementById('auth-layer').style.display = 'none'; 
                 document.getElementById('app-wrapper').style.display = 'block'; 
                 initializeApp(); 
@@ -138,19 +115,327 @@
             }
         }
 
+        // --- Initialization ---
         function initializeApp(){ 
             firebase.initializeApp(FIREBASE_CONFIG);
             db = firebase.database();
-            setupUI(); 
-            loadData(); 
+            setupUI();
+            loadSettingsAndData(); 
         }
 
-        function setupUI(){
+        // Orchestrates loading settings and then other data
+        function loadSettingsAndData() {
+            loadSettingsFromFirebase(); // Fetch settings first
+            loadData(); // Then load users and withdrawals
+        }
+
+        // --- Loading and Rendering Settings ---
+        function loadSettingsFromFirebase() {
+            db.ref('config/settings').once('value', (snap) => {
+                if (snap.exists()) {
+                    appSettings = snap.val();
+                    // Ensure all required keys exist with defaults if Firebase is empty or partially populated
+                    appSettings = {
+                        adZones: appSettings.adZones || { interstitial: '', popup: '' },
+                        adLimits: appSettings.adLimits || { interstitial: 0, popup: 0 },
+                        withdrawalSettings: appSettings.withdrawalSettings || { fee_percentage: 0 },
+                        engagementFeatures: appSettings.engagementFeatures || {
+                            daily_bonus: { enabled: false, reward: 0 },
+                            referral_system: { enabled: false, reward_per_referral: 0 }
+                        },
+                        minWithdrawUSD: appSettings.minWithdrawUSD || 1
+                    };
+                } else {
+                    // If settings node doesn't exist, initialize with default values and save
+                    console.warn("Settings node not found in Firebase. Initializing with defaults.");
+                    appSettings = {
+                        adZones: { interstitial: '9698971', popup: '9698971' }, // Default values from previous config
+                        adLimits: { interstitial: 5, popup: 3 },
+                        withdrawalSettings: { fee_percentage: 5 },
+                        engagementFeatures: {
+                            daily_bonus: { enabled: true, reward: 0.05 },
+                            referral_system: { enabled: true, reward_per_referral: 0.10 }
+                        },
+                        minWithdrawUSD: 1
+                    };
+                    db.ref('config/settings').set(appSettings).catch(e => console.error("Error saving default settings:", e));
+                }
+                renderSettingsView(); // Render the settings form after loading/initializing
+            });
+        }
+
+        // Dynamically renders the settings form based on appSettings
+        function renderSettingsView() {
+            const settingsDiv = document.getElementById('settings-view');
+            settingsDiv.innerHTML = `
+                <div class="card">
+                    <h3>Bot Settings</h3>
+                    
+                    <div id="ad-settings-section">
+                        <h4>Ad Configuration</h4>
+                        <div class="form-group">
+                            <label>Bot Username</label>
+                            <input type="text" value="${BOT_USERNAME || 'N/A'}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Ad Zone (Interstitial)</label>
+                            <input type="text" value="${appSettings.adZones.interstitial || ''}" data-setting="adZones.interstitial">
+                        </div>
+                        <div class="form-group">
+                            <label>Ad Zone (Popup)</label>
+                            <input type="text" value="${appSettings.adZones.popup || ''}" data-setting="adZones.popup">
+                        </div>
+                        <div class="form-group">
+                            <label>Daily Interstitial Limit</label>
+                            <input type="number" value="${appSettings.adLimits.interstitial || 0}" data-setting="adLimits.interstitial">
+                        </div>
+                        <div class="form-group">
+                            <label>Daily Popup Limit</label>
+                            <input type="number" value="${appSettings.adLimits.popup || 0}" data-setting="adLimits.popup">
+                        </div>
+                        <button class="btn btn-primary" onclick="saveSettingsSection('ad')">Save Ad Settings</button>
+                    </div>
+
+                    <hr>
+
+                    <div id="withdrawal-settings-section">
+                        <h4>Withdrawal Configuration</h4>
+                        <div class="form-group">
+                            <label>Withdrawal Fee (%)</label>
+                            <input type="number" value="${appSettings.withdrawalSettings.fee_percentage || 0}" data-setting="withdrawalSettings.fee_percentage">
+                        </div>
+                        <div class="form-group">
+                            <label>Minimum Withdrawal (USD)</label>
+                            <input type="number" value="${appSettings.minWithdrawUSD || 1}" data-setting="minWithdrawUSD">
+                        </div>
+                        <button class="btn btn-primary" onclick="saveSettingsSection('withdrawal')">Save Withdrawal Settings</button>
+                    </div>
+                    
+                    <hr>
+
+                    <div id="engagement-settings-section">
+                        <h4>Engagement Configuration</h4>
+                        <div class="form-group">
+                            <label>Daily Bonus Enabled</label>
+                            <select data-setting="engagementFeatures.daily_bonus.enabled">
+                                <option value="true" ${appSettings.engagementFeatures.daily_bonus.enabled ? 'selected' : ''}>Yes</option>
+                                <option value="false" ${!appSettings.engagementFeatures.daily_bonus.enabled ? 'selected' : ''}>No</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Daily Bonus Reward (USD)</label>
+                            <input type="number" step="0.001" value="${appSettings.engagementFeatures.daily_bonus.reward || 0}" data-setting="engagementFeatures.daily_bonus.reward">
+                        </div>
+                        <div class="form-group">
+                            <label>Referral System Enabled</label>
+                            <select data-setting="engagementFeatures.referral_system.enabled">
+                                <option value="true" ${appSettings.engagementFeatures.referral_system.enabled ? 'selected' : ''}>Yes</option>
+                                <option value="false" ${!appSettings.engagementFeatures.referral_system.enabled ? 'selected' : ''}>No</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Referral Reward (USD)</label>
+                            <input type="number" step="0.001" value="${appSettings.engagementFeatures.referral_system.reward_per_referral || 0}" data-setting="engagementFeatures.referral_system.reward_per_referral">
+                        </div>
+                        <button class="btn btn-primary" onclick="saveSettingsSection('engagement')">Save Engagement Settings</button>
+                    </div>
+
+                    <hr>
+
+                    <div id="payment-methods-section">
+                        <h4>Payment Methods</h4>
+                        <div id="payment-methods-list">
+                            Loading payment methods...
+                        </div>
+                        <div class="form-group">
+                            <label>New Payment Method Name</label>
+                            <input type="text" id="new-payment-method-name" placeholder="e.g., USDT, Payoneer">
+                        </div>
+                        <button class="btn btn-primary" onclick="addPaymentMethod()">Add Payment Method</button>
+                    </div>
+                </div>
+            `;
+            renderPaymentMethods(); // Load and render existing payment methods
+        }
+
+        // Handles saving specific sections of settings
+        function saveSettingsSection(section) {
+            let changesToSave = {};
+            let alertMessage = `Settings saved successfully!`;
+
+            try {
+                if (section === 'ad') {
+                    changesToSave.adZones = {
+                        interstitial: document.querySelector('[data-setting="adZones.interstitial"]').value,
+                        popup: document.querySelector('[data-setting="adZones.popup"]').value
+                    };
+                    changesToSave.adLimits = {
+                        interstitial: parseInt(document.querySelector('[data-setting="adLimits.interstitial"]').value),
+                        popup: parseInt(document.querySelector('[data-setting="adLimits.popup"]').value)
+                    };
+                    // Update appSettings locally immediately for responsiveness
+                    appSettings.adZones = changesToSave.adZones;
+                    appSettings.adLimits = changesToSave.adLimits;
+                } else if (section === 'withdrawal') {
+                    changesToSave.withdrawalSettings = {
+                        fee_percentage: parseFloat(document.querySelector('[data-setting="withdrawalSettings.fee_percentage"]').value)
+                    };
+                    changesToSave.minWithdrawUSD = parseFloat(document.querySelector('[data-setting="minWithdrawUSD"]').value);
+                    appSettings.withdrawalSettings = changesToSave.withdrawalSettings;
+                    appSettings.minWithdrawUSD = changesToSave.minWithdrawUSD;
+                } else if (section === 'engagement') {
+                    changesToSave.engagementFeatures = {
+                        daily_bonus: {
+                            enabled: document.querySelector('[data-setting="engagementFeatures.daily_bonus.enabled"]').value === 'true',
+                            reward: parseFloat(document.querySelector('[data-setting="engagementFeatures.daily_bonus.reward"]').value)
+                        },
+                        referral_system: {
+                            enabled: document.querySelector('[data-setting="engagementFeatures.referral_system.enabled"]').value === 'true',
+                            reward_per_referral: parseFloat(document.querySelector('[data-setting="engagementFeatures.referral_system.reward_per_referral"]').value)
+                        }
+                    };
+                    appSettings.engagementFeatures = changesToSave.engagementFeatures;
+                }
+
+                // Validate number inputs
+                for (const setting in changesToSave) {
+                    if (typeof changesToSave[setting] === 'object') {
+                        for (const key in changesToSave[setting]) {
+                            if (typeof changesToSave[setting][key] === 'number' && isNaN(changesToSave[setting][key])) {
+                                alert(`Invalid number input for ${setting} ${key}. Please enter a valid number.`);
+                                return;
+                            }
+                        }
+                    } else if (typeof changesToSave[setting] === 'number' && isNaN(changesToSave[setting])) {
+                         alert(`Invalid number input for ${setting}. Please enter a valid number.`);
+                         return;
+                    }
+                }
+
+                db.ref('config/settings').update(changesToSave)
+                    .then(() => alert(alertMessage))
+                    .catch(e => {
+                        console.error(`Error saving ${section} settings:`, e);
+                        alert(`Failed to save ${section} settings.`);
+                    });
+
+            } catch (error) {
+                console.error("Error processing settings save:", error);
+                alert("An error occurred while saving settings. Please check your inputs.");
+            }
+        }
+        
+        // --- Payment Methods Management ---
+        function renderPaymentMethods() {
+            const listDiv = document.getElementById('payment-methods-list');
+            listDiv.innerHTML = ''; // Clear previous list
+            
+            db.ref('paymentMethods').once('value', snap => {
+                const methods = snap.val() || [];
+                if (methods.length === 0) {
+                    listDiv.innerHTML = '<p>No payment methods added yet.</p>';
+                    return;
+                }
+                methods.forEach((method, index) => {
+                    if (!method || !method.name) return;
+                    const div = document.createElement('div');
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    div.style.gap = '10px';
+                    div.innerHTML = `
+                        <input type="text" value="${method.name}" data-index="${index}" style="flex-grow:1;">
+                        <button class="btn btn-primary btn-sm" onclick="editPaymentMethod(${index})">Update</button>
+                        <button class="btn btn-danger btn-sm" onclick="deletePaymentMethod(${index})">Delete</button>
+                    `;
+                    listDiv.appendChild(div);
+                });
+            });
+        }
+
+        function addPaymentMethod() {
+            const methodNameInput = document.getElementById('new-payment-method-name');
+            const methodName = methodNameInput.value.trim();
+            if (!methodName) {
+                alert("Please enter a payment method name.");
+                return;
+            }
+
+            const newMethod = { name: methodName };
+            const methodsRef = db.ref('paymentMethods');
+            
+            methodsRef.once('value', snap => {
+                const currentMethods = snap.val() || [];
+                currentMethods.push(newMethod);
+                methodsRef.set(currentMethods)
+                    .then(() => {
+                        alert("Payment method added!");
+                        methodNameInput.value = ''; // Clear input
+                        renderPaymentMethods(); // Refresh list
+                    })
+                    .catch(e => {
+                        console.error("Error adding payment method:", e);
+                        alert("Failed to add payment method.");
+                    });
+            });
+        }
+
+        function editPaymentMethod(index) {
+            const input = document.querySelector(`#payment-methods-list input[data-index="${index}"]`);
+            const newName = input.value.trim();
+            if (!newName) {
+                alert("Payment method name cannot be empty.");
+                return;
+            }
+
+            const methodsRef = db.ref('paymentMethods');
+            methodsRef.once('value', snap => {
+                const currentMethods = snap.val() || [];
+                if (index >= 0 && index < currentMethods.length) {
+                    currentMethods[index].name = newName;
+                    methodsRef.set(currentMethods)
+                        .then(() => {
+                            alert("Payment method updated!");
+                            renderPaymentMethods(); // Refresh list
+                        })
+                        .catch(e => {
+                            console.error("Error updating payment method:", e);
+                            alert("Failed to update payment method.");
+                        });
+                }
+            });
+        }
+
+        function deletePaymentMethod(index) {
+            if (!confirm("Are you sure you want to delete this payment method?")) {
+                return;
+            }
+
+            const methodsRef = db.ref('paymentMethods');
+            methodsRef.once('value', snap => {
+                const currentMethods = snap.val() || [];
+                if (index >= 0 && index < currentMethods.length) {
+                    currentMethods.splice(index, 1); // Remove item at index
+                    methodsRef.set(currentMethods)
+                        .then(() => {
+                            alert("Payment method deleted!");
+                            renderPaymentMethods(); // Refresh list
+                        })
+                        .catch(e => {
+                            console.error("Error deleting payment method:", e);
+                            alert("Failed to delete payment method.");
+                        });
+                }
+            });
+        }
+
+        // --- UI Setup and Navigation ---
+        function setupUI(){ 
             if (typeof BOT_USERNAME !== 'undefined') {
                 document.getElementById('bot-username-display').innerText = BOT_USERNAME;
             }
             document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('active'));
             
+            // Initial structure for views. Settings view is handled by renderSettingsView.
             document.getElementById('dashboard-view').innerHTML = `<div class="card" id="stats-card">Loading stats...</div>`;
             document.getElementById('users-view').innerHTML = `
                 <div class="card">
@@ -158,17 +443,9 @@
                     <div class="table-container">
                         <table class="table">
                             <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Username</th>
-                                    <th>Balance (USD)</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
+                                <tr><th>ID</th><th>Username</th><th>Balance (USD)</th><th>Status</th><th>Actions</th></tr>
                             </thead>
-                            <tbody id="users-table">
-                                <tr><td colspan="5" style="text-align:center;">Loading users...</td></tr>
-                            </tbody>
+                            <tbody id="users-table"><tr><td colspan="5" style="text-align:center;">Loading users...</td></tr></tbody>
                         </table>
                     </div>
                 </div>`;
@@ -178,20 +455,9 @@
                     <div class="table-container">
                         <table class="table">
                             <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Amount</th>
-                                    <th>Fee</th>
-                                    <th>Payable</th>
-                                    <th>Address</th>
-                                    <th>Method</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
+                                <tr><th>User</th><th>Amount</th><th>Fee</th><th>Payable</th><th>Address</th><th>Method</th><th>Status</th><th>Actions</th></tr>
                             </thead>
-                            <tbody id="withdraw-requests-table">
-                                <tr><td colspan="8" style="text-align:center;">Loading requests...</td></tr>
-                            </tbody>
+                            <tbody id="withdraw-requests-table"><tr><td colspan="8" style="text-align:center;">Loading requests...</td></tr></tbody>
                         </table>
                     </div>
                 </div>`;
@@ -206,43 +472,13 @@
                     <button class="btn btn-primary" onclick="saveBroadcast()">Send Message</button>
                 </div>`;
             
-            document.getElementById('settings-view').innerHTML = `
-                <div class="card">
-                    <h3>Read-Only Settings (Edit in config.js)</h3>
-                    <p>These core settings are managed in the config.js file for better security and control.</p>
-                    <div class="form-group">
-                        <label>Bot Username</label>
-                        <input type="text" value="${BOT_USERNAME || 'N/A'}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Ad Zone (Interstitial)</label>
-                        <input type="text" value="${AD_ZONES.interstitial || 'N/A'}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Ad Zone (Popup)</label>
-                        <input type="text" value="${AD_ZONES.popup || 'N/A'}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Daily Interstitial Limit</label>
-                        <input type="text" value="${AD_LIMITS.interstitial || 'N/A'}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Daily Popup Limit</label>
-                        <input type="text" value="${AD_LIMITS.popup || 'N/A'}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Withdrawal Fee</label>
-                        <input type="text" value="${WITHDRAWAL_SETTINGS.fee_percentage || 'N/A'}%" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Referral Reward</label>
-                        <input type="text" value="$${ENGAGEMENT_FEATURES.referral_system.reward_per_referral || 'N/A'}" readonly>
-                    </div>
-                </div>`;
+            // Settings view content will be loaded by renderSettingsView after fetching data.
+            document.getElementById('settings-view').innerHTML = 'Loading settings...';
             
             showView('dashboard', document.querySelector('.sidebar-nav a'));
         }
 
+        // Switches between different views in the admin panel
         function showView(viewName, link){ 
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); 
             document.getElementById(`${viewName}-view`).classList.add('active'); 
@@ -251,10 +487,12 @@
             }
             document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active-link')); 
             if (link) link.classList.add('active-link');
-            if (window.innerWidth < 992) document.getElementById('sidebar').classList.remove('active');
+            if (window.innerWidth < 992) document.getElementById('sidebar').classList.remove('active'); // Close sidebar on mobile
         }
 
+        // Loads user data and withdrawal requests from Firebase
         function loadData(){
+            // Load User Stats and Pending Withdrawals for Dashboard
             db.ref('users').on('value', u_snap => {
                 const users = u_snap.val() || {};
                 const numUsers = u_snap.numChildren();
@@ -270,11 +508,13 @@
                     `;
                 });
                 
+                // Populate Users Table
                 const user_tbody = document.getElementById('users-table'); 
-                user_tbody.innerHTML = '';
+                user_tbody.innerHTML = ''; // Clear existing rows
                 if (numUsers === 0) {
                     user_tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No users found.</td></tr>';
                 } else {
+                    // Displaying users by ID for easier management
                     Object.entries(users).forEach(([userId, user]) => {
                         const row = document.createElement('tr');
                         row.innerHTML = `
@@ -288,14 +528,15 @@
                                 </button>
                             </td>
                         `;
-                        user_tbody.prepend(row);
+                        user_tbody.prepend(row); // Add new row at the top
                     });
                 }
             });
 
+            // Load Withdrawal Requests Table
             db.ref('withdrawal_requests').limitToLast(50).on('value', snap => {
                 const w_tbody = document.getElementById('withdraw-requests-table'); 
-                w_tbody.innerHTML = '';
+                w_tbody.innerHTML = ''; // Clear existing rows
                 const requests = snap.val() || {};
                 const requestEntries = Object.entries(requests);
 
@@ -303,7 +544,8 @@
                     w_tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No withdrawal requests found.</td></tr>';
                 } else {
                     requestEntries.forEach(([key, req]) => {
-                        const fee = (req.amount * WITHDRAWAL_SETTINGS.fee_percentage) / 100; 
+                        // Calculate fee based on the currently loaded settings
+                        const fee = (req.amount * (appSettings.withdrawalSettings?.fee_percentage || 5)) / 100; 
                         const payable = req.amount - fee;
                         const row = document.createElement('tr');
                         row.innerHTML = `
@@ -321,16 +563,18 @@
                                 : ''}
                             </td>
                         `;
-                        w_tbody.prepend(row);
+                        w_tbody.prepend(row); // Add new row at the top
                     });
                 }
             });
 
+            // Load broadcast message (marquee text)
             db.ref('config/marqueeText').on('value', snap => { 
                 document.getElementById('marquee-text').value = snap.val() || ''; 
             });
         }
 
+        // --- Broadcast Functionality ---
         function saveBroadcast(){ 
             const message = document.getElementById('marquee-text').value.trim();
             db.ref('config/marqueeText').set(message)
@@ -341,6 +585,7 @@
                 });
         }
 
+        // --- Withdrawal Request Handling ---
         function handleRequest(key, status, amount, userId){
             let confirmMessage = '';
             if(status === 'rejected'){ 
@@ -354,6 +599,7 @@
             }
 
             if(status === 'rejected'){ 
+                // Add amount back to user's balance if rejected
                 db.ref(`users/${userId}/balanceUSD`).transaction(b => (b === null ? 0 : b) + amount)
                     .then(() => {
                         db.ref(`withdrawal_requests/${key}`).update({status});
@@ -364,6 +610,7 @@
                         alert('Failed to refund balance. Please handle manually.');
                     });
             } else if (status === 'approved') {
+                // For approved, just update the status. Actual payment processing is manual.
                 db.ref(`withdrawal_requests/${key}`).update({status})
                     .then(() => alert('Withdrawal request approved. Please process payment manually.'))
                     .catch(e => {
@@ -373,6 +620,7 @@
             }
         }
 
+        // --- User Management ---
         function banUser(userId){ 
             if(confirm(`Ban user ${userId}? This action cannot be undone without manual intervention.`)){ 
                 db.ref(`users/${userId}/banned`).set(true)
